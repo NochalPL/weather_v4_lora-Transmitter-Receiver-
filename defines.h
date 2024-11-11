@@ -15,7 +15,6 @@
 #define VSOLAR_PIN   36  //voltage divider for solar voltage monitor
 #define TEMP_PIN      4  // DS18B20 hooked up to GPIO pin 4
 #define LED_BUILTIN   2  //Diagnostics using built-in LED, may be set to 12 for newer boards that do not use devkit sockets
-#define LORA_PWR     16
 #define SENSOR_PWR   26
 #define CHG_STAT     34
 
