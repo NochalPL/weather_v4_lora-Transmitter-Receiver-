@@ -32,15 +32,11 @@
 */
 
 //Hardware build target: ESP32
-#define VERSION "1.1.1"
+#define VERSION "1.1.2"
 
-#ifdef heltec
-#include "heltec.h"
-#else
-#include <LoRa.h>
-#include <spi.h>
-#endif
-
+#include "config.h"
+#include <WiFi.h>
+#include <PubSubClient.h>
 #include "defines.h"
 #include <soc/soc.h>
 #include <soc/rtc_cntl_reg.h>
@@ -55,12 +51,6 @@
 #include <BH1750.h>
 #include <BME280I2C.h>
 #include <Adafruit_SI1145.h>
-
-//OLED diagnostics board
-//#include <Adafruit_GFX.h>
-//#include <Adafruit_SSD1306.h>
-
-//#define OLED_RESET 4
 
 
 //===========================================
@@ -144,20 +134,27 @@ time_t nextUpdate;
 struct tm timeinfo;
 //long rssi = 0;
 
+struct derived {
+  char cardinalDirection[5];
+  float degrees;
+};
+
+struct derived wind;
+
+float rssi_wifi;
+
 //===========================================
 // Setup
 //===========================================
 void setup() {
   esp_sleep_wakeup_cause_t wakeup_reason;
+
   struct sensorData environment = {};
   struct diagnostics hardware = {};
   environment.deviceID = DEVID;
   hardware.deviceID = DEVID;
 
   struct timeval tv;
-
-  void *LoRaPacket;
-  int LoRaPacketSize;
 
 
   Serial.begin(115200);
@@ -186,13 +183,14 @@ void setup() {
   pinMode(CHG_STAT, INPUT);
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(SENSOR_PWR, OUTPUT);
-  pinMode(LORA_PWR, OUTPUT);
 
   digitalWrite(LED_BUILTIN, LOW);
 
 
 
   BlinkLED(1);
+
+  wifi_connect();
 
 
 
@@ -265,17 +263,9 @@ void setup() {
         //environmental sensor data send
         readSensors(&environment);
 
-        LoRaPacket = &environment;
-        LoRaPacketSize = sizeof(environment);
         PrintEnvironment(environment);
-        //TODO: New LoRa power up
-        LoRaPowerUp();
-        BlinkLED(2);
-        //TODO: Send Environment or hardware
-        loraSend(LoRaPacket, LoRaPacketSize);
-        //Power down peripherals
-        LoRa.end();
-        powerDownAll();
+        SendDataMQTT(environment);
+        powerDownSensors();
       } else if (bootCount % (2 * SEND_FREQUENCY_LORA) == SEND_FREQUENCY_LORA) {
         title("Sending hardware data");
         sensorEnable();
@@ -284,17 +274,9 @@ void setup() {
         readSystemSensors(&hardware);
         hardware.bootCount = bootCount;
 
-        LoRaPacket = &hardware;
-        LoRaPacketSize = sizeof(hardware);
         Serial.printf("DEVID: %x\n", hardware.deviceID);
-        //TODO: New LoRa power up
-        LoRaPowerUp();
-        BlinkLED(2);
-        //TODO: Send Environment or hardware
-        loraSend(LoRaPacket, LoRaPacketSize);
-        //Power down peripherals
-        LoRa.end();
-        powerDownAll();
+        SendDataMQTT(hardware);
+        powerDownSensors();
       }
       bootCount++;
       break;
